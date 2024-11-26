@@ -64,10 +64,8 @@ grid_strides = np.array(grid_strides)
 from line_profiler import profile
 
 @profile
-def getBoxesFromOutput(output) -> List[Match]:
+def getBoxesFromOutput(values) -> List[Match]:
     boxes = []
-    values = output[0]
-    values = np.array(values)
 
     NUM_COLORS = 8
     NUM_TAGS = 8
@@ -135,9 +133,8 @@ def getBoxesForImg(img: MatLike) -> List[Match]:
     
     output = rknn.inference(inputs=[img], data_format='nhwc', inputs_pass_through=[0])
     
-    output = np.array(output)
-
-    output = output[0]
+    output = np.array(output)[0][0]
+    # output = output[0][0]
     
     boxes = getBoxesFromOutput(output)
     return boxes
