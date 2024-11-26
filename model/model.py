@@ -176,6 +176,6 @@ def main():
         print(f"Average FPS: {1e9 / np.mean(timings)}")
     
     timing()
-        
+
 if __name__ == "__main__":
     main()
