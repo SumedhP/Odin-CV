@@ -70,19 +70,15 @@ def getBoxesFromOutput(values) -> List[Match]:
     NUM_COLORS = 8
     NUM_TAGS = 8
 
-    confience_values = values[:, 8]
-    indices = np.where(confience_values > BBOX_CONFIDENCE_THRESHOLD)
+    # confience_values = values[:, 8]
+    indices = np.where(values[:, 8] > BBOX_CONFIDENCE_THRESHOLD)
     values = values[indices]
     
     # print("Max confidence: ", np.max(confience_values))
     curr_grid_strides = grid_strides[indices]
 
-    for i in range(len(values)):
-        element = values[i]
-
-        grid0 = curr_grid_strides[i].grid0
-        grid1 = curr_grid_strides[i].grid1
-        stride = curr_grid_strides[i].stride
+    for element, grid_stride in zip(values, curr_grid_strides):
+        grid0, grid1, stride = grid_stride.grid0, grid_stride.grid1, grid_stride.stride
 
         x_1 = (element[0] + grid0) * stride
         y_1 = (element[1] + grid1) * stride
@@ -194,7 +190,7 @@ def timing(img: MatLike):
     # Give 1 start for processing
     getBoxesForImg(img)
 
-    ITERATIONS = 500
+    ITERATIONS = 1000
     times = []
     from tqdm import tqdm
     
