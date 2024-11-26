@@ -190,7 +190,7 @@ def timing(img: MatLike):
     # Give 1 start for processing
     getBoxesForImg(img)
 
-    ITERATIONS = 1000
+    ITERATIONS = 2500
     times = []
     from tqdm import tqdm
     
@@ -208,6 +208,10 @@ def timing(img: MatLike):
     times = np.array(times) / 1e6
     plt.hist(times, bins=100)
     plt.savefig("histogram.png")
+    plt.figure("Time taken over time")
+    plt.plot(times)
+    plt.savefig("time_over_time.png")
+    
 
 
 def main():
