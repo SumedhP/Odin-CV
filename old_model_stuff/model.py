@@ -158,7 +158,7 @@ def timing(img: MatLike):
         model = ort.InferenceSession("model.onnx", providers=providers, sess_options=sess_options)
         print("Testing with", i, "cores")
 
-        ITERATIONS = 500
+        ITERATIONS = 100
         times = []
         for i in range(ITERATIONS):
             start = time_ns()

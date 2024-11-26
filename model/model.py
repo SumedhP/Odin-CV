@@ -24,6 +24,8 @@ RKNN_PATH = "model2.rknn"
 providers = ['CPUExecutionProvider']
 model = ort.InferenceSession("model.onnx", providers=providers)
 
+print("Made the regular onnx model")
+
 
 ####################################################################
 
@@ -46,12 +48,12 @@ rknn = RKNN(verbose=True)
 # if ret != 0:
 #         print('Export rknn model failed!')
 #         exit(ret)
+
+print("We've exported the model")
     
 rknn.load_rknn(RKNN_PATH)    
 
-print("We've exported the model")
-
-ret = rknn.init_runtime(target='rk3588', core_mask=RKNN.NPU_CORE_0)
+ret = rknn.init_runtime(target='rk3588', core_mask=RKNN.NPU_CORE_ALL)
 
 if ret != 0:
         print('Init runtime environment failed!')
@@ -202,7 +204,7 @@ def timing(img: MatLike):
     # Give 1 start for processing
     getBoxesForImg(img)
 
-    ITERATIONS = 500
+    ITERATIONS = 5000
     times = []
     from tqdm import tqdm
     for i in tqdm(range(ITERATIONS)):
