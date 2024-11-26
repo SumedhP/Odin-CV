@@ -15,11 +15,12 @@ import rknn
 
 from rknn.api import RKNN
 
+
 print("Starting model")
 
 
 model_path = "model.onnx"
-RKNN_PATH = "model2.rknn"
+RKNN_PATH = "model.rknn"
 
 providers = ['CPUExecutionProvider']
 model = ort.InferenceSession("model.onnx", providers=providers)
@@ -31,6 +32,7 @@ print("Made the regular onnx model")
 
 rknn = RKNN(verbose=True)
 
+# rknn.config(target_platform='rk3588', quantized_method='layer', remove_reshape=True, model_pruning=True)
 # rknn.config(target_platform='rk3588')
 
 # ret = rknn.load_onnx(model_path)
@@ -38,7 +40,8 @@ rknn = RKNN(verbose=True)
 #     print('Load model failed!')
 #     exit(ret)
 
-# ret = rknn.build(do_quantization=True, dataset='../2_17.txt')
+# # ret = rknn.build(do_quantization=True, dataset='../2_17.txt')
+# ret = rknn.build(do_quantization=False)
 
 # if ret != 0:
 #         print('Build model failed!')
@@ -49,11 +52,12 @@ rknn = RKNN(verbose=True)
 #         print('Export rknn model failed!')
 #         exit(ret)
 
-print("We've exported the model")
+# print("We've exported the model")
     
 rknn.load_rknn(RKNN_PATH)    
 
-ret = rknn.init_runtime(target='rk3588', core_mask=RKNN.NPU_CORE_ALL)
+ret = rknn.init_runtime(target='rk3588', core_mask=RKNN.NPU_CORE_AUTO)
+# ret = rknn.init_runtime(fallback_prior_device="gpu")
 
 if ret != 0:
         print('Init runtime environment failed!')
@@ -64,8 +68,12 @@ print("Made model")
 
 BBOX_CONFIDENCE_THRESHOLD = 0.85
 grid_strides = generateGridsAndStride()
+grid_strides = np.array(grid_strides)
 
 
+from line_profiler import profile
+
+@profile
 def getBoxesFromOutput(output) -> List[Match]:
     boxes = []
     values = output[0]
@@ -77,9 +85,9 @@ def getBoxesFromOutput(output) -> List[Match]:
     confience_values = values[:, 8]
     indices = np.where(confience_values > BBOX_CONFIDENCE_THRESHOLD)
     values = values[indices]
-
-    temp = np.array(grid_strides)
-    curr_grid_strides = temp[indices]
+    
+    # print("Max confidence: ", np.max(confience_values))
+    curr_grid_strides = grid_strides[indices]
 
     for i in range(len(values)):
         element = values[i]
@@ -120,32 +128,28 @@ def getBoxesFromOutput(output) -> List[Match]:
 
     return boxes
 
-
+@profile
 def makeImageAsInput(img: MatLike) -> np.ndarray:
     # Assert that the image is 416x416
     assert img.shape == (416, 416, 3)
+    
     img = img.astype(np.float32)
-    img = np.transpose(img, (2, 0, 1))
     img = np.expand_dims(img, axis=0)
+    
     return img
 
+@profile
 def getBoxesForImg(img: MatLike) -> List[Match]:
     img = makeImageAsInput(img)
     
-    # start_time = time_ns()
-    # output = model.run(None, {"images": img})
-    # end_time = time_ns()
-    # print(f"Time taken: {(end_time - start_time) / 1e6} ms")
+    output = rknn.inference(inputs=[img], data_format='nhwc', inputs_pass_through=[0])
     
-    # start_time = time_ns()
-    output = rknn.inference(inputs=[img], data_format='nchw')
-    # end_time = time_ns()
-    # print(f"Time taken NPU: {(end_time - start_time) / 1e6} ms")
-    
+    output = np.array(output)
+
     output = output[0]
+    
     boxes = getBoxesFromOutput(output)
     return boxes
-
 
 color_to_word = [
     "Blue",
@@ -199,15 +203,14 @@ def compressImageAndScaleOutput(img: MatLike) -> List[Match]:
 
 
 def timing(img: MatLike):
-    print(img.shape)
-    
     # Give 1 start for processing
     getBoxesForImg(img)
 
-    ITERATIONS = 5000
+    ITERATIONS = 500
     times = []
     from tqdm import tqdm
-    for i in tqdm(range(ITERATIONS)):
+    
+    for _ in tqdm(range(ITERATIONS)):
         start = time_ns()
         boxes = getBoxesForImg(img)
         merged = mergeListOfMatches(boxes)
@@ -216,12 +219,10 @@ def timing(img: MatLike):
     avg_time = np.mean(times)
     print(f"Time taken: {(avg_time) / 1e6} ms")
     
-    # rknn.eval_perf()
-    
-    # import matplotlib.pyplot as plt
-    # times = np.array(times) / 1e6
-    # plt.hist(times, bins=50)
-    # plt.show()
+    import matplotlib.pyplot as plt
+    times = np.array(times) / 1e6
+    plt.hist(times, bins=100)
+    plt.savefig("histogram.png")
 
 
 def main():
@@ -230,17 +231,13 @@ def main():
 
     img = cv2.imread(input_file)
     
-    # img = img[:540][:540]
-
-    # boxes = compressImageAndScaleOutput(img)
-    
     img = img[:416, :416]
-
+    
     timing(img)
-    
-    return
-    
-    # boxes = getBoxesForImg(img)
+
+    start_time = time_ns()
+    boxes = getBoxesForImg(img)
+    end_time = time_ns()
     print("Found ", len(boxes), " boxes: \n")
     for box in boxes:
         print(box)
@@ -251,12 +248,10 @@ def main():
         print(box)
 
     img = putTextOnImage(img, merged)
-    cv2.imshow("Image", img)
-    cv2.waitKey(0)
 
     output_file = "../labelled_image.jpg"
     cv2.imwrite(output_file, img)
-
+    
 
 if __name__ == "__main__":
     main()

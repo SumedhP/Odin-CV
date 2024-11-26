@@ -187,11 +187,11 @@ def main():
     
     img = img[:416, :416]
 
-    timing(img)
+    # timing(img)
     
-    return
+    # return
     
-    # boxes = getBoxesForImg(img)
+    boxes = getBoxesForImg(img)
     print("Found ", len(boxes), " boxes: \n")
     for box in boxes:
         print(box)
@@ -202,8 +202,6 @@ def main():
         print(box)
 
     img = putTextOnImage(img, merged)
-    cv2.imshow("Image", img)
-    cv2.waitKey(0)
 
     output_file = "../labelled_image.jpg"
     cv2.imwrite(output_file, img)
