@@ -202,6 +202,7 @@ def timing(img: MatLike):
         times.append(end - start)
     avg_time = np.mean(times)
     print(f"Time taken: {(avg_time) / 1e6} ms")
+    print(f"FPS: {1 / (avg_time / 1e9)}")
     
     import matplotlib.pyplot as plt
     times = np.array(times) / 1e6
@@ -219,9 +220,7 @@ def main():
     
     timing(img)
 
-    start_time = time_ns()
     boxes = getBoxesForImg(img)
-    end_time = time_ns()
     print("Found ", len(boxes), " boxes: \n")
     for box in boxes:
         print(box)
