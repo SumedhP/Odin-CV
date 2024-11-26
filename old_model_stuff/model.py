@@ -3,62 +3,18 @@ import numpy as np
 from cv2.typing import MatLike
 from typing import List
 import onnxruntime as ort
-import rknn.api
-import rknn.utils
 
 from GridStride import generateGridsAndStride
 from Match import Match, Point, mergeListOfMatches
 
 from time import time_ns
 
-import rknn
+sess_options = ort.SessionOptions()
 
-from rknn.api import RKNN
+sess_options.intra_op_num_threads = 0
 
-print("Starting model")
-
-
-model_path = "model.onnx"
-RKNN_PATH = "model2.rknn"
-
-providers = ['CPUExecutionProvider']
-model = ort.InferenceSession("model.onnx", providers=providers)
-
-
-####################################################################
-
-rknn = RKNN(verbose=True)
-
-# rknn.config(target_platform='rk3588')
-
-# ret = rknn.load_onnx(model_path)
-# if ret != 0:
-#     print('Load model failed!')
-#     exit(ret)
-
-# ret = rknn.build(do_quantization=True, dataset='../2_17.txt')
-
-# if ret != 0:
-#         print('Build model failed!')
-#         exit(ret)
-
-# rknn.export_rknn(RKNN_PATH)
-# if ret != 0:
-#         print('Export rknn model failed!')
-#         exit(ret)
-    
-rknn.load_rknn(RKNN_PATH)    
-
-print("We've exported the model")
-
-ret = rknn.init_runtime(target='rk3588', core_mask=RKNN.NPU_CORE_0)
-
-if ret != 0:
-        print('Init runtime environment failed!')
-        exit(ret)
-
-print("Made model")
-
+providers = ["CPUExecutionProvider"]
+model = ort.InferenceSession("model.onnx", providers=providers, sess_options=sess_options)
 
 BBOX_CONFIDENCE_THRESHOLD = 0.85
 grid_strides = generateGridsAndStride()
@@ -131,14 +87,9 @@ def getBoxesForImg(img: MatLike) -> List[Match]:
     img = makeImageAsInput(img)
     
     # start_time = time_ns()
-    # output = model.run(None, {"images": img})
+    output = model.run(None, {"images": img})
     # end_time = time_ns()
     # print(f"Time taken: {(end_time - start_time) / 1e6} ms")
-    
-    # start_time = time_ns()
-    output = rknn.inference(inputs=[img], data_format='nchw')
-    # end_time = time_ns()
-    # print(f"Time taken NPU: {(end_time - start_time) / 1e6} ms")
     
     output = output[0]
     boxes = getBoxesFromOutput(output)
@@ -197,24 +148,26 @@ def compressImageAndScaleOutput(img: MatLike) -> List[Match]:
 
 
 def timing(img: MatLike):
-    print(img.shape)
-    
     # Give 1 start for processing
     getBoxesForImg(img)
-
-    ITERATIONS = 500
-    times = []
-    from tqdm import tqdm
-    for i in tqdm(range(ITERATIONS)):
-        start = time_ns()
-        boxes = getBoxesForImg(img)
-        merged = mergeListOfMatches(boxes)
-        end = time_ns()
-        times.append(end - start)
-    avg_time = np.mean(times)
-    print(f"Time taken: {(avg_time) / 1e6} ms")
     
-    # rknn.eval_perf()
+    for i in range(1,7):
+        sess_options = ort.SessionOptions()
+        sess_options.intra_op_num_threads = i
+        providers = ["CPUExecutionProvider"]
+        model = ort.InferenceSession("model.onnx", providers=providers, sess_options=sess_options)
+        print("Testing with", i, "cores")
+
+        ITERATIONS = 500
+        times = []
+        for i in range(ITERATIONS):
+            start = time_ns()
+            boxes = getBoxesForImg(img)
+            merged = mergeListOfMatches(boxes)
+            end = time_ns()
+            times.append(end - start)
+        avg_time = np.mean(times)
+        print(f"Time taken: {(avg_time) / 1e6} ms")
     
     # import matplotlib.pyplot as plt
     # times = np.array(times) / 1e6
