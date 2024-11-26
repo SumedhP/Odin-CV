@@ -2,146 +2,119 @@ import cv2
 import numpy as np
 from cv2.typing import MatLike
 from typing import List
-import onnxruntime as ort
-import rknn.api
-import rknn.utils
 
 from GridStride import generateGridsAndStride
 from Match import Match, Point, mergeListOfMatches
-
-from time import time_ns
 
 import rknn
 
 from rknn.api import RKNN
 
 
-print("Starting model")
+class Model:
+    INPUT_SIZE = 416
+    BOUNDING_BOX_CONFIDENCE_THRESHOLD = 0.85
 
+    color_to_word = ["Blue", "Red", "Neutral", "Purple"]
+    tag_to_word = ["Sentry", "1", "2", "3", "4", "5", "Outpost", "Base"]
 
-model_path = "model.onnx"
-RKNN_PATH = "model_quantizied.rknn"
+    def __init__(self, model_path: str = "models/model.rknn") -> None:
+        self.model = RKNN(verbose=True)
+        self.model.load_rknn(model_path)
+        self.model.init_runtime(target="rk3588", core_mask=RKNN.NPU_CORE_AUTO)
 
-rknn = RKNN(verbose=True)
+        self.grid_strides = generateGridsAndStride()
+        self.grid_strides = np.array(self.grid_strides)
 
-# rknn.config(target_platform='rk3588')
+    def processInput(self, img: MatLike) -> List[Match]:
+        img, scalar_h, scalar_w = self.formatInput(img)
 
-# ret = rknn.load_onnx(model_path)
-# if ret != 0:
-#     print('Load model failed!')
-#     exit(ret)
-
-# ret = rknn.build(do_quantization=True, dataset='../2_17.txt')
-# # ret = rknn.build(do_quantization=False)
-
-# if ret != 0:
-#         print('Build model failed!')
-#         exit(ret)
-
-# rknn.export_rknn(RKNN_PATH)
-# if ret != 0:
-#         print('Export rknn model failed!')
-#         exit(ret)
-
-# print("We've exported the model")
-    
-rknn.load_rknn(RKNN_PATH)    
-
-ret = rknn.init_runtime(target='rk3588', core_mask=RKNN.NPU_CORE_AUTO)
-
-if ret != 0:
-        print('Init runtime environment failed!')
-        exit(ret)
-
-print("Made model")
-
-
-BBOX_CONFIDENCE_THRESHOLD = 0.85
-grid_strides = generateGridsAndStride()
-grid_strides = np.array(grid_strides)
-
-
-from line_profiler import profile
-
-@profile
-def getBoxesFromOutput(values) -> List[Match]:
-    boxes = []
-
-    NUM_COLORS = 8
-    NUM_TAGS = 8
-
-    # confience_values = values[:, 8]
-    indices = np.where(values[:, 8] > BBOX_CONFIDENCE_THRESHOLD)
-    values = values[indices]
-    
-    # print("Max confidence: ", np.max(confience_values))
-    curr_grid_strides = grid_strides[indices]
-
-    for element, grid_stride in zip(values, curr_grid_strides):
-        grid0, grid1, stride = grid_stride.grid0, grid_stride.grid1, grid_stride.stride
-
-        x_1 = (element[0] + grid0) * stride
-        y_1 = (element[1] + grid1) * stride
-        x_2 = (element[2] + grid0) * stride
-        y_2 = (element[3] + grid1) * stride
-        x_3 = (element[4] + grid0) * stride
-        y_3 = (element[5] + grid1) * stride
-        x_4 = (element[6] + grid0) * stride
-        y_4 = (element[7] + grid1) * stride
-
-        confidence = element[8]
-
-        color = np.argmax(element[9 : 9 + NUM_COLORS])
-        tag = np.argmax(element[9 + NUM_COLORS : 9 + NUM_COLORS + NUM_TAGS])
-
-        bottomLeft = Point(x_1, y_1)
-        topLeft = Point(x_2, y_2)
-        topRight = Point(x_3, y_3)
-        bottomRight = Point(x_4, y_4)
-
-        box = Match(
-            [bottomLeft, topLeft, topRight, bottomRight],
-            color_to_word[int(color / 2)],
-            tag_to_word[tag],
-            confidence,
+        output = self.model.inference(
+            inputs=[img], data_format="nhwc", inputs_pass_through=[0]
         )
-        boxes.append(box)
 
-    # Sort the boxes by confidence
-    boxes.sort(reverse=True)
+        output = np.array(output)[0][0]
 
-    return boxes
+        boxes = self.getBoxesFromOutput(output)
+        
+        print("Found ", len(boxes), " boxes: \n")
 
-@profile
-def makeImageAsInput(img: MatLike) -> np.ndarray:
-    # Assert that the image is 416x416
-    assert img.shape == (416, 416, 3)
-    
-    # img = img.astype(np.float32)
-    # img = img.astype(np.int8)
-    img = np.expand_dims(img, axis=0)
-    
-    return img
+        # Scale the boxes back to the original image size
+        for box in boxes:
+            for i in range(4):
+                box.points[i].x = box.points[i].x * scalar_w
+                box.points[i].y = box.points[i].y * scalar_h
 
-@profile
-def getBoxesForImg(img: MatLike) -> List[Match]:
-    img = makeImageAsInput(img)
-    
-    output = rknn.inference(inputs=[img], data_format='nhwc', inputs_pass_through=[0])
-    
-    output = np.array(output)[0][0]
-    # output = output[0][0]
-    
-    boxes = getBoxesFromOutput(output)
-    return boxes
+        boxes = mergeListOfMatches(boxes)
 
-color_to_word = [
-    "Blue",
-    "Red",
-    "Neutral",
-    "Purple",
-]
-tag_to_word = ["Sentry", "1", "2", "3", "4", "5", "Outpost", "Base"]
+        return boxes
+
+    # Resize and format to nhwc format needed by the model
+    def formatInput(self, img: MatLike):
+        # Resize the image to the input size of the model
+        scalar_h = img.shape[0] / self.INPUT_SIZE
+        scalar_w = img.shape[1] / self.INPUT_SIZE
+
+        img = cv2.resize(
+            img, (self.INPUT_SIZE, self.INPUT_SIZE), interpolation=cv2.INTER_AREA
+        )
+        
+        assert img.shape == (416, 416, 3)
+
+        # Add in the n value (batch size of 1) to the image
+        img = np.expand_dims(img, axis=0)
+
+        return img, scalar_h, scalar_w
+
+    def getBoxesFromOutput(self, values) -> List[Match]:
+        boxes = []
+
+        NUM_COLORS = 8
+        NUM_TAGS = 8
+
+        indices = np.where(values[:, 8] > self.BOUNDING_BOX_CONFIDENCE_THRESHOLD)
+        values = values[indices]
+
+        curr_grid_strides = self.grid_strides[indices]
+
+        for element, grid_stride in zip(values, curr_grid_strides):
+            grid0, grid1, stride = (
+                grid_stride.grid0,
+                grid_stride.grid1,
+                grid_stride.stride,
+            )
+
+            x_1 = (element[0] + grid0) * stride
+            y_1 = (element[1] + grid1) * stride
+            x_2 = (element[2] + grid0) * stride
+            y_2 = (element[3] + grid1) * stride
+            x_3 = (element[4] + grid0) * stride
+            y_3 = (element[5] + grid1) * stride
+            x_4 = (element[6] + grid0) * stride
+            y_4 = (element[7] + grid1) * stride
+
+            confidence = element[8]
+
+            color = np.argmax(element[9 : 9 + NUM_COLORS])
+            tag = np.argmax(element[9 + NUM_COLORS : 9 + NUM_COLORS + NUM_TAGS])
+
+            bottomLeft = Point(x_1, y_1)
+            topLeft = Point(x_2, y_2)
+            topRight = Point(x_3, y_3)
+            bottomRight = Point(x_4, y_4)
+
+            box = Match(
+                [bottomLeft, topLeft, topRight, bottomRight],
+                self.color_to_word[int(color / 2)],
+                self.tag_to_word[tag],
+                confidence,
+            )
+            boxes.append(box)
+
+        # Sort the boxes by confidence
+        boxes.sort(reverse=True)
+
+        return boxes
 
 
 def putTextOnImage(img: MatLike, boxes: List[Match]) -> MatLike:
@@ -168,77 +141,41 @@ def putTextOnImage(img: MatLike, boxes: List[Match]) -> MatLike:
 
     return img
 
-TARGET_WH = 416
-def compressImageAndScaleOutput(img: MatLike) -> List[Match]:
-    input_w = img.shape[1]
-    input_h = img.shape[0]
-
-    scalar_w = input_w / TARGET_WH
-    scalar_h = input_h / TARGET_WH
-    img = cv2.resize(img, (TARGET_WH, TARGET_WH))
-
-    boxes = getBoxesForImg(img)
-    
-    for box in boxes:
-        for i in range(4):
-            box.points[i].x = box.points[i].x * scalar_w
-            box.points[i].y = box.points[i].y * scalar_h
-    return boxes
-
-
-def timing(img: MatLike):
-    # Give 1 start for processing
-    getBoxesForImg(img)
-
-    ITERATIONS = 2500
-    times = []
-    from tqdm import tqdm
-    
-    for _ in tqdm(range(ITERATIONS)):
-        start = time_ns()
-        boxes = getBoxesForImg(img)
-        merged = mergeListOfMatches(boxes)
-        end = time_ns()
-        times.append(end - start)
-    avg_time = np.mean(times)
-    print(f"Time taken: {(avg_time) / 1e6} ms")
-    print(f"FPS: {1 / (avg_time / 1e9)}")
-    
-    import matplotlib.pyplot as plt
-    times = np.array(times) / 1e6
-    plt.hist(times, bins=100)
-    plt.savefig("histogram.png")
-    plt.figure("Time taken over time")
-    plt.plot(times)
-    plt.savefig("time_over_time.png")
-    
-
 
 def main():
-    
+
     input_file = "../test_image.jpg"
 
+    model = Model()
     img = cv2.imread(input_file)
-    
-    img = img[:416, :416]
-    
-    timing(img)
 
-    boxes = getBoxesForImg(img)
+    boxes = model.processInput(img)
     print("Found ", len(boxes), " boxes: \n")
     for box in boxes:
         print(box)
 
-    merged = mergeListOfMatches(boxes)
-    print("After merging: \n")
-    for box in merged:
-        print(box)
-
-    img = putTextOnImage(img, merged)
+    img = putTextOnImage(img, boxes)
 
     output_file = "../labelled_image.jpg"
     cv2.imwrite(output_file, img)
     
+    def timing():
+        from time import time_ns as time
+        from tqdm import tqdm
 
+        timings = []
+        ITERATIONS = 100
+        for _ in tqdm(range(ITERATIONS)):
+            start = time()
+            model.processInput(img)
+            end = time()
+            timings.append(end - start)
+        timings = np.array(timings)
+        # Print avg time in ms and FPS
+        print(f"Average time: {np.mean(timings) / 1e6} ms")
+        print(f"Average FPS: {1e9 / np.mean(timings)}")
+    
+    timing()
+        
 if __name__ == "__main__":
     main()
