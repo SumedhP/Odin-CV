@@ -21,7 +21,7 @@ class Model:
     def __init__(self, model_path: str = "models/model.rknn") -> None:
         self.model = RKNN(verbose=True)
         self.model.load_rknn(model_path)
-        self.model.init_runtime(target="rk3588", core_mask=RKNN.NPU_CORE_AUTO)
+        self.model.init_runtime(target="rk3588", core_mask=RKNN.NPU_CORE_ALL)
 
         self.grid_strides = generateGridsAndStride()
         self.grid_strides = np.array(self.grid_strides)
@@ -37,7 +37,7 @@ class Model:
 
         boxes = self.getBoxesFromOutput(output)
         
-        print("Found ", len(boxes), " boxes: \n")
+        # print("Found ", len(boxes), " boxes: \n")
 
         # Scale the boxes back to the original image size
         for box in boxes:
@@ -164,7 +164,7 @@ def main():
         from tqdm import tqdm
 
         timings = []
-        ITERATIONS = 100
+        ITERATIONS = 1000
         for _ in tqdm(range(ITERATIONS)):
             start = time()
             model.processInput(img)
