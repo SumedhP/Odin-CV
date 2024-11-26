@@ -29,7 +29,7 @@ while True:
     end_time = time.perf_counter_ns()
     time_diff = (end_time - start_time) * 1.0 / 1e9
 
-    print(f"Time taken: {time_diff}")
+    print(f"\rTime taken: {time_diff}", end="")
     fps = 1 / time_diff if time_diff > 0 else 0
 
     # Display FPS on the frame
