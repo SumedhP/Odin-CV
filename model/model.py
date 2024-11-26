@@ -20,19 +20,10 @@ print("Starting model")
 
 
 model_path = "model.onnx"
-RKNN_PATH = "model.rknn"
-
-providers = ['CPUExecutionProvider']
-model = ort.InferenceSession("model.onnx", providers=providers)
-
-print("Made the regular onnx model")
-
-
-####################################################################
+RKNN_PATH = "model_quantizied.rknn"
 
 rknn = RKNN(verbose=True)
 
-# rknn.config(target_platform='rk3588', quantized_method='layer', remove_reshape=True, model_pruning=True)
 # rknn.config(target_platform='rk3588')
 
 # ret = rknn.load_onnx(model_path)
@@ -40,8 +31,8 @@ rknn = RKNN(verbose=True)
 #     print('Load model failed!')
 #     exit(ret)
 
-# # ret = rknn.build(do_quantization=True, dataset='../2_17.txt')
-# ret = rknn.build(do_quantization=False)
+# ret = rknn.build(do_quantization=True, dataset='../2_17.txt')
+# # ret = rknn.build(do_quantization=False)
 
 # if ret != 0:
 #         print('Build model failed!')
@@ -57,7 +48,6 @@ rknn = RKNN(verbose=True)
 rknn.load_rknn(RKNN_PATH)    
 
 ret = rknn.init_runtime(target='rk3588', core_mask=RKNN.NPU_CORE_AUTO)
-# ret = rknn.init_runtime(fallback_prior_device="gpu")
 
 if ret != 0:
         print('Init runtime environment failed!')
@@ -133,7 +123,8 @@ def makeImageAsInput(img: MatLike) -> np.ndarray:
     # Assert that the image is 416x416
     assert img.shape == (416, 416, 3)
     
-    img = img.astype(np.float32)
+    # img = img.astype(np.float32)
+    # img = img.astype(np.int8)
     img = np.expand_dims(img, axis=0)
     
     return img
