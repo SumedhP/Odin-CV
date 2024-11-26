@@ -148,6 +148,12 @@ def main():
 
     model = Model()
     img = cv2.imread(input_file)
+    
+    # Take center crop of 540x540
+    diff = 960 - 540
+    diff = diff // 2
+    img = img[:540, diff:diff+540]
+    
 
     boxes = model.processInput(img)
     print("Found ", len(boxes), " boxes: \n")
