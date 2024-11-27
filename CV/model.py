@@ -18,10 +18,10 @@ class Model:
     color_to_word = ["Blue", "Red", "Neutral", "Purple"]
     tag_to_word = ["Sentry", "1", "2", "3", "4", "5", "Outpost", "Base"]
 
-    def __init__(self, model_path: str = "models/model.rknn") -> None:
+    def __init__(self, model_path: str = "models/model.rknn", core_mask=RKNN.NPU_CORE_ALL) -> None:
         self.model = RKNN(verbose=True)
         self.model.load_rknn(model_path)
-        self.model.init_runtime(target="rk3588", core_mask=RKNN.NPU_CORE_ALL)
+        self.model.init_runtime(target="rk3588", core_mask=core_mask)
 
         self.grid_strides = generateGridsAndStride()
         self.grid_strides = np.array(self.grid_strides)
