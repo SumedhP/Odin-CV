@@ -2,10 +2,16 @@ from model import Model, putTextOnImage
 import cv2
 import time
 
-cap = cv2.VideoCapture(0)
+count = 0
+while count < 10:
+  cap = cv2.VideoCapture(count)
 
-if not (cap.isOpened()):
-  print("Could not open video device")
+  if not (cap.isOpened()):
+    print("Could not open video device ", count)
+    count += 1
+  
+  break
+  
   
 model = Model()
 
@@ -16,12 +22,11 @@ print(f"Resolution: {cap.get(cv2.CAP_PROP_FRAME_WIDTH)}x{cap.get(cv2.CAP_PROP_FR
 print(f"FPS: {cap.get(cv2.CAP_PROP_FPS)}")
 
 while True:
+    start_time = time.perf_counter_ns()
     ret, frame = cap.read()
     if not ret:
         print("Can't receive frame (stream end?). Exiting ...")
         break
-
-    start_time = time.perf_counter_ns()
     
     # Process frame and get boxes
     boxes = model.processInput(frame)
