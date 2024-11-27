@@ -1,4 +1,4 @@
-from CV.model import Model, putTextOnImage 
+from model import Model, putTextOnImage 
 import cv2
 import time
 

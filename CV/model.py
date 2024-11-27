@@ -6,8 +6,6 @@ from typing import List
 from GridStride import generateGridsAndStride
 from Match import Match, Point, mergeListOfMatches
 
-import rknn
-
 from rknn.api import RKNN
 
 
