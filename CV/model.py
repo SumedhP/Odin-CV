@@ -64,8 +64,6 @@ class Model:
         
         assert img.shape == (416, 416, 3)
         
-        # cv2.imshow("Resized", img)
-
         # Add in the n value (batch size of 1) to the image
         img = np.expand_dims(img, axis=0)
 
