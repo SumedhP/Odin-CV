@@ -56,8 +56,9 @@ while True:
     
     time_diff = (time.perf_counter_ns() - prev_time) * 1.0 / 1e9
 
-    print(f"\rTime taken: {time_diff}", end="")
+    print(f"Time taken: {time_diff}")
     fps = 1 / time_diff if time_diff > 0 else 0
+    # print(f"FPS: {fps:.2f}")
 
     # Display FPS on the frame
     frame = putTextOnImage(frame, boxes)

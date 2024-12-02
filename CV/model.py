@@ -60,9 +60,7 @@ class Model:
         scalar_h = img.shape[0] / self.INPUT_SIZE
         scalar_w = img.shape[1] / self.INPUT_SIZE
 
-        img = cv2.resize(
-            img, (self.INPUT_SIZE, self.INPUT_SIZE)
-        )
+        img = cv2.resize(img, (self.INPUT_SIZE, self.INPUT_SIZE))
         
         assert img.shape == (416, 416, 3)
         
