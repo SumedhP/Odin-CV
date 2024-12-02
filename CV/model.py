@@ -49,7 +49,7 @@ class Model:
 
     # Resize and format to nhwc format needed by the model
     def formatInput(self, img: MatLike):
-        # If input img is 1280x800, chop off the sides to make it 800x800
+        # Chop off the sides to make it square
         x_cutoff = 0
         if img.shape[1] != img.shape[0]:
             x_cutoff = img.shape[1] - img.shape[0]
