@@ -43,8 +43,33 @@ print(f"Resolution: {cap.get(cv2.CAP_PROP_FRAME_WIDTH)}x{cap.get(cv2.CAP_PROP_FR
 #print the FPS of the camera
 print(f"FPS: {cap.get(cv2.CAP_PROP_FPS)}")
 
+frame_count = 0
+prev_second = time.perf_counter_ns() // 1e9
+
+model_times = []
+
 while True:
-    prev_time = time.perf_counter_ns()
+    frame_count += 1
+
+    if(time.perf_counter_ns() // 1e9 != prev_second):
+        import subprocess
+        temp1 = subprocess.run(['cat', '/sys/devices/virtual/thermal/thermal_zone1/temp'], stdout=subprocess.PIPE)
+        temp2 = subprocess.run(['cat', '/sys/devices/virtual/thermal/thermal_zone2/temp'], stdout=subprocess.PIPE)
+        temp3 = subprocess.run(['cat', '/sys/devices/virtual/thermal/thermal_zone3/temp'], stdout=subprocess.PIPE)
+        # Get values and average
+        temp1 = int(temp1.stdout) / 1000.0
+        temp2 = int(temp2.stdout) / 1000.0
+        temp3 = int(temp3.stdout) / 1000.0
+        print(f"Temperature: {temp1}°C, {temp2}°C, {temp3}°C")
+        print(f"Average temperature: {(temp1 + temp2 + temp3) / 3}°C")
+        print(f"Frames in the last second: {frame_count}")
+        
+        print(f"Average processing time: {sum(model_times) / len(model_times) / 1e6} ms")
+        
+        frame_count = 0
+        prev_second = time.perf_counter_ns() // 1e9
+        model_times = []
+        
     ret, frame = cap.read()
     
     if not ret:
@@ -52,17 +77,13 @@ while True:
         break
       
     # Process frame and get boxes
+    start_time = time.perf_counter_ns()
     boxes = model.processInput(frame)
+    end_time = time.perf_counter_ns()
+    model_times.append(end_time - start_time)
     
-    time_diff = (time.perf_counter_ns() - prev_time) * 1.0 / 1e9
-
-    print(f"Time taken: {time_diff}")
-    fps = 1 / time_diff if time_diff > 0 else 0
-    # print(f"FPS: {fps:.2f}")
-
     # Display FPS on the frame
     frame = putTextOnImage(frame, boxes)
-    cv2.putText(frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     # Show frame
     cv2.imshow('frame', frame)
