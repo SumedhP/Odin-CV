@@ -27,9 +27,7 @@ class Model:
     def processInput(self, img: MatLike) -> List[Match]:
         img, scalar_h, scalar_w, x_cutoff = self.formatInput(img)
         
-        output = self.model.inference(
-            inputs=[img], data_format="nhwc", inputs_pass_through=[0]
-        )
+        output = self.model.inference(inputs=[img], data_format="nhwc", inputs_pass_through=[0])
 
         output = np.array(output)[0][0]
 
