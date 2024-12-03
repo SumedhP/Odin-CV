@@ -40,13 +40,23 @@ class FrameBuffer:
         self.capture_thread.start()
 
     def capture_frames(self):
+        prev_second = time.perf_counter_ns() // 1e9
+        frame_count = 0
+        
+        
         while not self.stop_thread:
             ret, frame = self.cap.read()
+            frame_count += 1
+            
+            if(time.perf_counter_ns() // 1e9 != prev_second):
+                print(f"Frames in the last second: {frame_count} ------------------------------------------")
+                frame_count = 0
+                prev_second = time.perf_counter_ns() // 1e9
+            
             if ret:
                 if self.buffer.full():
                     self.buffer.get()  # Remove the oldest frame if buffer is full
                 self.buffer.put(frame)
-            time.sleep(0.01)  # Small delay to reduce CPU usage
 
     def get_frame(self):
         # Get the next frame from the buffer (non-blocking)
@@ -58,6 +68,18 @@ class FrameBuffer:
         self.stop_thread = True
         self.capture_thread.join()
         self.cap.release()
+
+def printTemperatures():
+    import subprocess
+    temp1 = subprocess.run(['cat', '/sys/devices/virtual/thermal/thermal_zone1/temp'], stdout=subprocess.PIPE)
+    temp2 = subprocess.run(['cat', '/sys/devices/virtual/thermal/thermal_zone2/temp'], stdout=subprocess.PIPE)
+    temp3 = subprocess.run(['cat', '/sys/devices/virtual/thermal/thermal_zone3/temp'], stdout=subprocess.PIPE)
+    # Get values and average
+    temp1 = int(temp1.stdout) / 1000.0
+    temp2 = int(temp2.stdout) / 1000.0
+    temp3 = int(temp3.stdout) / 1000.0
+    print(f"Temperature: {temp1}°C, {temp2}°C, {temp3}°C")
+    print(f"Average temperature: {(temp1 + temp2 + temp3) / 3}°C")
 
 # Example usage
 frame_buffer = FrameBuffer(buffer_size=10)
@@ -74,20 +96,12 @@ while True:
         frame_count += 1
 
         if(time.perf_counter_ns() // 1e9 != prev_second):
-            import subprocess
-            temp1 = subprocess.run(['cat', '/sys/devices/virtual/thermal/thermal_zone1/temp'], stdout=subprocess.PIPE)
-            temp2 = subprocess.run(['cat', '/sys/devices/virtual/thermal/thermal_zone2/temp'], stdout=subprocess.PIPE)
-            temp3 = subprocess.run(['cat', '/sys/devices/virtual/thermal/thermal_zone3/temp'], stdout=subprocess.PIPE)
-            # Get values and average
-            temp1 = int(temp1.stdout) / 1000.0
-            temp2 = int(temp2.stdout) / 1000.0
-            temp3 = int(temp3.stdout) / 1000.0
-            print(f"Temperature: {temp1}°C, {temp2}°C, {temp3}°C")
-            print(f"Average temperature: {(temp1 + temp2 + temp3) / 3}°C")
-            print(f"Frames in the last second: {frame_count}")
-
+            # printTemperatures()
+            print(f"Frames processed in the last second: {frame_count} ooooooooooooooooooooooooo")
             if(len(model_times) > 0):
                 print(f"Average processing time: {sum(model_times) / len(model_times) / 1e6} ms")
+                print("Max processing time: ", max(model_times) / 1e6, "ms")
+                print("Cummulative time: ", sum(model_times) / 1e9, "s")
             print()
             
             frame_count = 0
