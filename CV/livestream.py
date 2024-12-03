@@ -45,12 +45,10 @@ print(f"FPS: {cap.get(cv2.CAP_PROP_FPS)}")
 
 frame_count = 0
 prev_second = time.perf_counter_ns() // 1e9
-
 model_times = []
 
 while True:
     frame_count += 1
-
     if(time.perf_counter_ns() // 1e9 != prev_second):
         import subprocess
         temp1 = subprocess.run(['cat', '/sys/devices/virtual/thermal/thermal_zone1/temp'], stdout=subprocess.PIPE)
@@ -63,8 +61,9 @@ while True:
         print(f"Temperature: {temp1}°C, {temp2}°C, {temp3}°C")
         print(f"Average temperature: {(temp1 + temp2 + temp3) / 3}°C")
         print(f"Frames in the last second: {frame_count}")
-        
+
         print(f"Average processing time: {sum(model_times) / len(model_times) / 1e6} ms")
+        print()
         
         frame_count = 0
         prev_second = time.perf_counter_ns() // 1e9
