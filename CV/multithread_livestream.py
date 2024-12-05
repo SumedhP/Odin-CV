@@ -94,11 +94,6 @@ frame_count = 0
 prev_second = time.perf_counter_ns() // 1e9
 model_times = []
 
-moving_average_length = 500
-moving_average_index = 0
-import numpy as np
-moving_average_z = np.zeros(moving_average_length)
-
 while True:
     frame = frame_buffer.get_frame()
     if frame is not None:
@@ -132,10 +127,6 @@ while True:
             import os
             os.system("clear")
             print("Translation vector: ", tvec)
-            moving_average_z[moving_average_index] = tvec[2][0]
-            moving_average_index += 1
-            moving_average_index %= moving_average_length
-            print("Moving average z: ", np.mean(moving_average_z))
 
         # Process the frame
         cv2.imshow('Processed Frame', frame)
