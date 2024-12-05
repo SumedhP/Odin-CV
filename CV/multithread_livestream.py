@@ -6,6 +6,8 @@ from model import Model, putTextOnImage
 
 from world_position import world_position
 
+PRINT_FRAMES = False
+
 class FrameBuffer:
     def __init__(self, buffer_size=10):
         self.buffer = queue.Queue(maxsize=buffer_size)
@@ -16,7 +18,7 @@ class FrameBuffer:
 
         # Set the resolution to 800x600
         WIDTH = 1280
-        HEIGHT = 800
+        HEIGHT = 720
         print(self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH))
         print(self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT))
 
@@ -50,7 +52,7 @@ class FrameBuffer:
             ret, frame = self.cap.read()
             frame_count += 1
             
-            if(time.perf_counter_ns() // 1e9 != prev_second):
+            if(time.perf_counter_ns() // 1e9 != prev_second and PRINT_FRAMES):
                 print(f"Frames in the last second: {frame_count} ------------------------------------------")
                 frame_count = 0
                 prev_second = time.perf_counter_ns() // 1e9
@@ -92,12 +94,17 @@ frame_count = 0
 prev_second = time.perf_counter_ns() // 1e9
 model_times = []
 
+# Log file csv, make if not exists
+# log_file = open("log.csv", "w")
+# Write x, y, z
+# log_file.write("x,y,z\n")
+
 while True:
     frame = frame_buffer.get_frame()
     if frame is not None:
         frame_count += 1
 
-        if(time.perf_counter_ns() // 1e9 != prev_second):
+        if(time.perf_counter_ns() // 1e9 != prev_second and PRINT_FRAMES):
             # printTemperatures()
             print(f"Frames processed in the last second: {frame_count} ooooooooooooooooooooooooo")
             if(len(model_times) > 0):
@@ -122,7 +129,14 @@ while True:
         # Get first box and get world position
         if len(boxes) > 0:
             rvec, tvec = world_position(boxes[0])
-            print(rvec, tvec)
+            # print(rvec, tvec)
+            import os
+            os.system("clear")
+            print("Rotation vector: ", rvec)
+            print()
+            print("Translation vector: ", tvec)
+            # Add tvec values to log file
+            # log_file.write(f"{tvec[0][0]},{tvec[1][0]},{tvec[2][0]}\n")
         
         # Process the frame
         cv2.imshow('Processed Frame', frame)
