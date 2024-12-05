@@ -6,7 +6,7 @@ from model import Model, putTextOnImage
 
 from world_position import world_position
 
-PRINT_FRAMES = False
+PRINT_FRAMES = True
 
 class FrameBuffer:
     def __init__(self, buffer_size=10):
@@ -115,21 +115,22 @@ while True:
         # Process frame and get boxes
         start_time = time.perf_counter_ns()
         boxes = model.processInput(frame)
-        end_time = time.perf_counter_ns()
-        model_times.append(end_time - start_time)
         
-        # Display FPS on the frame
-        frame = putTextOnImage(frame, boxes)
+        # frame = putTextOnImage(frame, boxes)
         
         # Get first box and get world position
         if len(boxes) > 0:
+            # start_time = time.perf_counter_ns()
             rvec, tvec = world_position(boxes[0])
-            import os
-            os.system("clear")
-            print("Translation vector: ", tvec)
+            # end_time = time.perf_counter_ns()
+            # print(f"World position time: {(end_time - start_time) / 1e6} ms")
+            # print("Translation vector: ", tvec)
+        
+        end_time = time.perf_counter_ns()
+        model_times.append(end_time - start_time)
 
         # Process the frame
-        cv2.imshow('Processed Frame', frame)
+        # cv2.imshow('Processed Frame', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
