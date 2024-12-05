@@ -48,6 +48,11 @@ def merge_match(rect1: Match, rect2: Match) -> Match:
     if rect1.color != rect2.color or rect1.tag != rect2.tag:
         raise ValueError("Rectangles must have same color and tag to merge")
 
+    if rect1.confidence > rect2.confidence:
+        return rect1
+    else:
+        return rect2
+
     x_coords = [p.x for p in rect1.points] + [p.x for p in rect2.points]
     y_coords = [p.y for p in rect1.points] + [p.y for p in rect2.points]
 

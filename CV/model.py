@@ -6,8 +6,6 @@ from typing import List
 from GridStride import generateGridsAndStride
 from Match import Match, Point, mergeListOfMatches
 
-import rknn
-
 from rknn.api import RKNN
 
 
@@ -18,20 +16,18 @@ class Model:
     color_to_word = ["Blue", "Red", "Neutral", "Purple"]
     tag_to_word = ["Sentry", "1", "2", "3", "4", "5", "Outpost", "Base"]
 
-    def __init__(self, model_path: str = "models/model.rknn") -> None:
+    def __init__(self, model_path: str = "models/model.rknn", core_mask=RKNN.NPU_CORE_ALL) -> None:
         self.model = RKNN(verbose=True)
         self.model.load_rknn(model_path)
-        self.model.init_runtime(target="rk3588", core_mask=RKNN.NPU_CORE_ALL)
+        self.model.init_runtime(target="rk3588", core_mask=core_mask)
 
         self.grid_strides = generateGridsAndStride()
         self.grid_strides = np.array(self.grid_strides)
 
     def processInput(self, img: MatLike) -> List[Match]:
-        img, scalar_h, scalar_w = self.formatInput(img)
-
-        output = self.model.inference(
-            inputs=[img], data_format="nhwc", inputs_pass_through=[0]
-        )
+        img, scalar_h, scalar_w, x_cutoff = self.formatInput(img)
+        
+        output = self.model.inference(inputs=[img], data_format="nhwc", inputs_pass_through=[0])
 
         output = np.array(output)[0][0]
 
@@ -42,7 +38,7 @@ class Model:
         # Scale the boxes back to the original image size
         for box in boxes:
             for i in range(4):
-                box.points[i].x = box.points[i].x * scalar_w
+                box.points[i].x = box.points[i].x * scalar_w + x_cutoff
                 box.points[i].y = box.points[i].y * scalar_h
 
         boxes = mergeListOfMatches(boxes)
@@ -51,20 +47,25 @@ class Model:
 
     # Resize and format to nhwc format needed by the model
     def formatInput(self, img: MatLike):
+        # Chop off the sides to make it square
+        x_cutoff = 0
+        if img.shape[1] != img.shape[0]:
+            x_cutoff = img.shape[1] - img.shape[0]
+            x_cutoff = x_cutoff // 2
+            img = img[:, x_cutoff : x_cutoff + img.shape[0]]
+        
         # Resize the image to the input size of the model
         scalar_h = img.shape[0] / self.INPUT_SIZE
         scalar_w = img.shape[1] / self.INPUT_SIZE
 
-        img = cv2.resize(
-            img, (self.INPUT_SIZE, self.INPUT_SIZE), interpolation=cv2.INTER_AREA
-        )
+        img = cv2.resize(img, (self.INPUT_SIZE, self.INPUT_SIZE))
         
         assert img.shape == (416, 416, 3)
-
+        
         # Add in the n value (batch size of 1) to the image
         img = np.expand_dims(img, axis=0)
 
-        return img, scalar_h, scalar_w
+        return img, scalar_h, scalar_w, x_cutoff
 
     def getBoxesFromOutput(self, values) -> List[Match]:
         boxes = []
@@ -150,9 +151,9 @@ def main():
     img = cv2.imread(input_file)
     
     # Take center crop of 540x540
-    diff = 960 - 540
-    diff = diff // 2
-    img = img[:540, diff:diff+540]
+    x_cutoff = 960 - 540
+    x_cutoff = x_cutoff // 2
+    img = img[:540, x_cutoff:x_cutoff+540]
     
 
     boxes = model.processInput(img)
