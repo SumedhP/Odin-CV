@@ -4,6 +4,8 @@ import queue
 import time
 from model import Model, putTextOnImage
 
+from world_position import world_position
+
 class FrameBuffer:
     def __init__(self, buffer_size=10):
         self.buffer = queue.Queue(maxsize=buffer_size)
@@ -116,6 +118,11 @@ while True:
         
         # Display FPS on the frame
         frame = putTextOnImage(frame, boxes)
+        
+        # Get first box and get world position
+        if len(boxes) > 0:
+            rvec, tvec = world_position(boxes[0])
+            print(rvec, tvec)
         
         # Process the frame
         cv2.imshow('Processed Frame', frame)
