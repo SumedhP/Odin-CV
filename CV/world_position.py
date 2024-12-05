@@ -7,7 +7,9 @@ from Match import Match, Point
 
 
 # import camera matrix and distortion coefficients from calibration
-CALIBRATION_PATH = "../camera_calibration_calibdb.json"
+# CALIBRATION_PATH = "../camera_calibration_calibdb.json"
+CALIBRATION_PATH = "../calib2.json"
+
 
 # get the values from the calibration file
 import json
