@@ -94,10 +94,10 @@ frame_count = 0
 prev_second = time.perf_counter_ns() // 1e9
 model_times = []
 
-# Log file csv, make if not exists
-# log_file = open("log.csv", "w")
-# Write x, y, z
-# log_file.write("x,y,z\n")
+moving_average_length = 500
+moving_average_index = 0
+import numpy as np
+moving_average_z = np.zeros(moving_average_length)
 
 while True:
     frame = frame_buffer.get_frame()
@@ -129,15 +129,14 @@ while True:
         # Get first box and get world position
         if len(boxes) > 0:
             rvec, tvec = world_position(boxes[0])
-            # print(rvec, tvec)
             import os
             os.system("clear")
-            print("Rotation vector: ", rvec)
-            print()
             print("Translation vector: ", tvec)
-            # Add tvec values to log file
-            # log_file.write(f"{tvec[0][0]},{tvec[1][0]},{tvec[2][0]}\n")
-        
+            moving_average_z[moving_average_index] = tvec[2][0]
+            moving_average_index += 1
+            moving_average_index %= moving_average_length
+            print("Moving average z: ", np.mean(moving_average_z))
+
         # Process the frame
         cv2.imshow('Processed Frame', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):

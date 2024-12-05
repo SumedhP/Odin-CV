@@ -29,8 +29,10 @@ print("Distortion matrix:\n", distortion_coefficients)
 
 # Actual plate size is 135mm x 135mm
 # plate_size = 135
-plate_height = 65 # 135 regular, 65 for light bar
+plate_height = 60
 plate_width = 135
+
+aspect_ratio = plate_width / plate_height
 
 plate_height /= 1000
 plate_width /= 1000
@@ -46,18 +48,18 @@ object_points = [
 object_points = np.array(object_points).astype(np.float32)
 
 def world_position(detected_plate: Match):
+    detected_plate_height = detected_plate.points[1].y - detected_plate.points[0].y
+    expected_width = detected_plate_height * aspect_ratio
+        
     image_points = [
         (detected_plate.points[0].x, detected_plate.points[0].y),
         (detected_plate.points[1].x, detected_plate.points[1].y),
-        (detected_plate.points[2].x, detected_plate.points[2].y),
-        (detected_plate.points[3].x, detected_plate.points[3].y),
+        (detected_plate.points[1].x + expected_width, detected_plate.points[2].y),
+        (detected_plate.points[0].x + expected_width, detected_plate.points[3].y),
     ]
     
     image_points = np.array(image_points).astype(np.float32)
     
-    # print(object_points.shape)
-    # print(image_points.shape)
-
     success, rvec, tvec = cv2.solvePnP(
         object_points,
         image_points,
