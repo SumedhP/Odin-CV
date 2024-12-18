@@ -8,7 +8,6 @@ from Match import Match, Point, mergeListOfMatches
 
 from rknn.api import RKNN
 
-
 class Model:
     INPUT_SIZE = 416
     BOUNDING_BOX_CONFIDENCE_THRESHOLD = 0.85
