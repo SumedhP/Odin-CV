@@ -3,10 +3,11 @@ import numpy as np
 from cv2.typing import MatLike
 from typing import List
 
-from onnxruntime.OutputScalar import generateGridsAndStride
+from OutputScalar import generateOffsetsAndScalars
 from Match import Match, Point, mergeListOfMatches
 
-from rknn.api import RKNN
+import onnxruntime as ort
+
 
 class Model:
     INPUT_SIZE = 416
@@ -15,24 +16,45 @@ class Model:
     color_to_word = ["Blue", "Red", "Neutral", "Purple"]
     tag_to_word = ["Sentry", "1", "2", "3", "4", "5", "Outpost", "Base"]
 
-    def __init__(self, model_path: str = "models/model.rknn", core_mask=RKNN.NPU_CORE_ALL) -> None:
-        self.model = RKNN(verbose=True)
-        self.model.load_rknn(model_path)
-        self.model.init_runtime(target="rk3588", core_mask=core_mask)
+    def __init__(self, model_path: str = "model/model.onnx") -> None:
+        providers = self.getConfiguredProviders()
 
-        self.grid_strides = generateGridsAndStride()
-        self.grid_strides = np.array(self.grid_strides)
+        self.model = ort.InferenceSession(model_path, providers=providers)
+
+        self.outputOffsetAndScale = generateOffsetsAndScalars()
+
+    # This sets what to run the model on, priority is tensorrt if avaialble, then CUDA, then CPU (default)
+    def getConfiguredProviders(self):
+        return [
+            (
+                "TensorrtExecutionProvider",
+                {
+                    # Select GPU to execute, doesn't matter in our case
+                    "device_id": 0,
+                    # Set GPU memory usage limit, this is in bytes (2**30 = 1GB)
+                    "trt_max_workspace_size": (2**30) * 4,
+                    # Enable INT8 precision for faster inference (3ms -> 1.75ms)
+                    "trt_int8_enable": True,
+                    # Cache created engine so it doesn't have to be recreated every time
+                    "trt_engine_cache_enable": True,
+                    # Directory to store the cached engine
+                    "trt_engine_cache_path": "./trt_engines",
+                    # Setup a CUDA graph, this maybe help optimize our model since it has so many layers
+                    "trt_cuda_graph_enable": True,
+                    # Max out optimization level for funsies
+                    "trt_builder_optimization_level": 5,
+                },
+            ),
+            ("CUDAExecutionProvider"),
+        ]
 
     def processInput(self, img: MatLike) -> List[Match]:
         img, scalar_h, scalar_w, x_cutoff = self.formatInput(img)
-        
-        output = self.model.inference(inputs=[img], data_format="nhwc", inputs_pass_through=[0])
 
+        output = self.model.run(None, {"images": img})
         output = np.array(output)[0][0]
 
         boxes = self.getBoxesFromOutput(output)
-        
-        # print("Found ", len(boxes), " boxes: \n")
 
         # Scale the boxes back to the original image size
         for box in boxes:
@@ -52,17 +74,20 @@ class Model:
             x_cutoff = img.shape[1] - img.shape[0]
             x_cutoff = x_cutoff // 2
             img = img[:, x_cutoff : x_cutoff + img.shape[0]]
-        
+
         # Resize the image to the input size of the model
         scalar_h = img.shape[0] / self.INPUT_SIZE
         scalar_w = img.shape[1] / self.INPUT_SIZE
 
+        # Image shape is resized to (416, 416, 3)
         img = cv2.resize(img, (self.INPUT_SIZE, self.INPUT_SIZE))
-        
-        assert img.shape == (416, 416, 3)
-        
-        # Add in the n value (batch size of 1) to the image
+
+        # Model input expects (1, 3, 416, 416)
+        img = img.transpose((2, 0, 1))
         img = np.expand_dims(img, axis=0)
+
+        # Convert to float32
+        img = img.astype(np.float32)
 
         return img, scalar_h, scalar_w, x_cutoff
 
@@ -75,23 +100,23 @@ class Model:
         indices = np.where(values[:, 8] > self.BOUNDING_BOX_CONFIDENCE_THRESHOLD)
         values = values[indices]
 
-        curr_grid_strides = self.grid_strides[indices]
+        outputOffsetAndScale = self.outputOffsetAndScale[indices]
 
-        for element, grid_stride in zip(values, curr_grid_strides):
-            grid0, grid1, stride = (
-                grid_stride.grid0,
-                grid_stride.grid1,
-                grid_stride.stride,
+        for element, offsetAndScale in zip(values, outputOffsetAndScale):
+            x_offset, y_offset, scalar = (
+                offsetAndScale.x_offset,
+                offsetAndScale.y_offset,
+                offsetAndScale.scalar,
             )
 
-            x_1 = (element[0] + grid0) * stride
-            y_1 = (element[1] + grid1) * stride
-            x_2 = (element[2] + grid0) * stride
-            y_2 = (element[3] + grid1) * stride
-            x_3 = (element[4] + grid0) * stride
-            y_3 = (element[5] + grid1) * stride
-            x_4 = (element[6] + grid0) * stride
-            y_4 = (element[7] + grid1) * stride
+            x_1 = (element[0] + x_offset) * scalar
+            y_1 = (element[1] + y_offset) * scalar
+            x_2 = (element[2] + x_offset) * scalar
+            y_2 = (element[3] + y_offset) * scalar
+            x_3 = (element[4] + x_offset) * scalar
+            y_3 = (element[5] + y_offset) * scalar
+            x_4 = (element[6] + x_offset) * scalar
+            y_4 = (element[7] + y_offset) * scalar
 
             confidence = element[8]
 
@@ -117,54 +142,23 @@ class Model:
         return boxes
 
 
-def putTextOnImage(img: MatLike, boxes: List[Match]) -> MatLike:
-
-    for i in range(len(boxes)):
-        box = boxes[i]
-        for j in range(4):
-            cv2.line(
-                img,
-                (int(box.points[j].x), int(box.points[j].y)),
-                (int(box.points[(j + 1) % 4].x), int(box.points[(j + 1) % 4].y)),
-                (0, 255, 0),
-                2,
-            )
-        cv2.putText(
-            img,
-            f"{box.color} {box.tag}",
-            (int(box.points[0].x), int(box.points[0].y - 10)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (0, 255, 0),
-            2,
-        )
-
-    return img
-
-
 def main():
 
-    input_file = "../test_image.jpg"
+    input_file = "test_image.jpg"
 
     model = Model()
     img = cv2.imread(input_file)
-    
+
     # Take center crop of 540x540
     x_cutoff = 960 - 540
     x_cutoff = x_cutoff // 2
-    img = img[:540, x_cutoff:x_cutoff+540]
-    
+    img = img[:540, x_cutoff : x_cutoff + 540]
 
     boxes = model.processInput(img)
     print("Found ", len(boxes), " boxes: \n")
     for box in boxes:
         print(box)
 
-    img = putTextOnImage(img, boxes)
-
-    output_file = "../labelled_image.jpg"
-    cv2.imwrite(output_file, img)
-    
     def timing():
         from time import time_ns as time
         from tqdm import tqdm
@@ -180,8 +174,9 @@ def main():
         # Print avg time in ms and FPS
         print(f"Average time: {np.mean(timings) / 1e6} ms")
         print(f"Average FPS: {1e9 / np.mean(timings)}")
-    
+
     timing()
+
 
 if __name__ == "__main__":
     main()
