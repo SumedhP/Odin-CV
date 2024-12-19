@@ -69,7 +69,7 @@ class Model:
 
         return boxes
 
-    # Resize and format to nhwc format needed by the model
+    # Format input to match expected model input of (1, 3, 416, 416)
     def formatInput(self, img: MatLike):
         # Chop off the sides to make it square
         x_cutoff = 0
