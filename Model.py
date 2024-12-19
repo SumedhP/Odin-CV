@@ -46,6 +46,8 @@ class Model:
                     "trt_builder_optimization_level": 5,
                 },
             ),
+            # Use CUDA as a fallback if TensorRT is not available
+            # This is not expected so not gonna specify options here
             ("CUDAExecutionProvider"),
         ]
 
