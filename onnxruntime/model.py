@@ -33,15 +33,16 @@ class Model:
                     "device_id": 0,
                     # Set GPU memory usage limit, this is in bytes (2**30 = 1GB)
                     "trt_max_workspace_size": (2**30) * 4,
-                    # Enable INT8 precision for faster inference (3ms -> 1.75ms)
+                    # Enable INT8 precision for faster inference (3ms -> 1.75ms on an Orin NX)
                     "trt_int8_enable": True,
                     # Cache created engine so it doesn't have to be recreated every time
                     "trt_engine_cache_enable": True,
                     # Directory to store the cached engine
                     "trt_engine_cache_path": "./trt_engines",
-                    # Setup a CUDA graph, this maybe help optimize our model since it has so many layers
+                    # Setup a CUDA graph
+                    # This maybe helps optimize our model since it has so many layers
                     "trt_cuda_graph_enable": True,
-                    # Max out optimization level for funsies
+                    # Max out optimization level for funsies, default is 3
                     "trt_builder_optimization_level": 5,
                 },
             ),
