@@ -23,6 +23,8 @@ class Model:
 
         self.outputOffsetAndScale = generateOffsetsAndScalars()
 
+        self.warmup()
+
     # This sets what to run the model on, priority is tensorrt if avaialble, then CUDA, then CPU (default)
     def getConfiguredProviders(self):
         return [
@@ -50,6 +52,13 @@ class Model:
             # This is not expected so not gonna specify options here
             ("CUDAExecutionProvider"),
         ]
+
+    def warmup(self):
+        # Warm up the model by running it on a dummy input
+        dummy_input = np.random.rand(1, 3, self.INPUT_SIZE, self.INPUT_SIZE).astype(
+            np.float32
+        )
+        self.model.run(None, {"images": dummy_input})
 
     def processInput(self, img: MatLike) -> List[Match]:
         img, scalar_h, scalar_w, x_cutoff = self.formatInput(img)
