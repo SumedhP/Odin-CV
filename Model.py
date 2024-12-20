@@ -3,7 +3,7 @@ import numpy as np
 from cv2.typing import MatLike
 from typing import List
 
-from OutputScalar import generateOffsetsAndScalars
+from dataclasses import dataclass
 from Match import Match, Point, mergeListOfMatches
 
 import onnxruntime as ort
@@ -154,7 +154,35 @@ class Model:
         return boxes
 
 
+@dataclass
+class OffsetAndScale:
+    x_offset: int
+    y_offset: int
+    scalar: int
+
+    def __str__(self) -> str:
+        return f"X Offset: {self.x_offset}, Y Offset: {self.y_offset}, Scalar: {self.scalar}"
+
+
+def generateOffsetsAndScalars() -> np.ndarray:
+    INPUT_W = 416
+    INPUT_H = 416
+    SCALE = [8, 16, 32]
+    output = []
+    for scalar in SCALE:
+        grid_h = INPUT_H // scalar
+        grid_w = INPUT_W // scalar
+        for y in range(grid_h):
+            for x in range(grid_w):
+                output.append(OffsetAndScale(x, y, scalar))
+    output = np.array(output)
+    return output
+
+
 def main():
+    
+    grids = generateOffsetsAndScalars()
+    print("Model offset and scalars:\n", grids[:5], "\n")
 
     input_file = "test_image.jpg"
 
@@ -170,6 +198,7 @@ def main():
     print("Found ", len(boxes), " boxes: \n")
     for box in boxes:
         print(box)
+    print()
 
     def timing():
         from time import time_ns as time
